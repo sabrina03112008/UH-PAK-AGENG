@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <title>To-Do List (Tanpa CSS)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <h1>To-Do List</h1>
+
+  <section aria-labelledby="add-task-title">
+    <h2 id="add-task-title">Tambah Tugas</h2>
+    <form id="task-form">
+      <label for="task-input">Nama tugas:</label>
+      <input id="task-input" type="text" placeholder="mis. Belajar SQL" required />
+      <button type="submit">Tambah</button>
+    </form>
+  </section>
+
+  <section aria-labelledby="controls-title">
+    <h2 id="controls-title">Kontrol</h2>
+    <div role="group" aria-label="Filter">
+      <button data-filter="all">Semua</button>
+      <button data-filter="active">Aktif</button>
+      <button data-filter="completed">Selesai</button>
+    </div>
+    <div>
+      <label for="search-input">Cari:</label>
+      <input id="search-input" type="search" placeholder="ketik untuk mencari..." />
+      <button id="clear-completed">Hapus yang selesai</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="list-title">
+    <h2 id="list-title">Daftar Tugas</h2>
+    <ul id="task-list" aria-live="polite"></ul>
+  </section>
+
+  <template id="task-item-template">
+    <li>
+      <input type="checkbox" class="toggle" />
+      <span class="title"></span>
+      <button class="edit">Ubah</button>
+      <button class="delete">Hapus</button>
+    </li>
+  </template>
+
+  <script>
+    (function(){
+      const STORAGE_KEY = "todo_items_v1";
+      const form = document.getElementById("task-form");
+      const input = document.getElementById("task-input");
+      const list = document.getElementById("task-list");
+      const template = document.getElementById("task-item-template");
+      const search = document.getElementById("search-input");
+      const clearCompletedBtn = document.getElementById("clear-completed");
+      const filterButtons = Array.from(document.querySelectorAll("[data-filter]"));
+
+      let state = {
+        items: load(),
+        filter: "all",
+        search: ""
+      };
+
+      function load(){
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        } catch {
+          return [];
+        }
+      }
+
+      function save(){
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+      }
+
+      function addItem(title){
+        state.items.push({
+          id: crypto.randomUUID(),
+          title: title.trim(),
+          completed: false,
+          createdAt: Date.now()
+        });
+        save();
+        render();
+      }
+
+      function deleteItem(id){
+        state.items = state.items.filter(i => i.id !== id);
+        save();
+        render();
+      }
+
+      function toggleItem(id){
+        const item = state.items.find(i => i.id === id);
+        if(item){
+          item.completed = !item.completed;
+          save();
+          render();
+        }
+      }
+
+      function updateItem(id, newTitle){
+        const item = state.items.find(i => i.id === id);
+        if(item){
+          item.title = newTitle.trim();
+          save();
+          render();
+        }
+      }
+
+      function clearCompleted(){
+        state.items = state.items.filter(i => !i.completed);
+        save();
+        render();
+      }
+
+      function filteredItems(){
+        const q = state.search.toLowerCase();
+        return state.items.filter(i => {
+          const passSearch = !q || i.title.toLowerCase().includes(q);
+          const passFilter =
+            state.filter === "all" ||
+            (state.filter === "active" && !i.completed) ||
+            (state.filter === "completed" && i.completed);
+          return passSearch && passFilter;
+        }).sort((a,b) => a.completed - b.completed || b.createdAt - a.createdAt);
+      }
+
+      function render(){
+        list.innerHTML = "";
+        const items = filteredItems();
+        if(items.length === 0){
+          const empty = document.createElement("li");
+          empty.textContent = "Belum ada tugas.";
+          list.appendChild(empty);
+          return;
+        }
+
+        for(const item of items){
+          const node = template.content.firstElementChild.cloneNode(true);
+          const checkbox = node.querySelector(".toggle");
+          const titleSpan = node.querySelector(".title");
+          const editBtn = node.querySelector(".edit");
+          const delBtn = node.querySelector(".delete");
+
+          checkbox.checked = item.completed;
+          titleSpan.textContent = item.title + (item.completed ? " (selesai)" : "");
+          if(item.completed) titleSpan.setAttribute("aria-label", item.title + " selesai");
+
+          checkbox.addEventListener("change", () => toggleItem(item.id));
+          delBtn.addEventListener("click", () => deleteItem(item.id));
+          editBtn.addEventListener("click", () => {
+            const newTitle = prompt("Ubah judul tugas:", item.title);
+            if(newTitle !== null && newTitle.trim() !== ""){
+              updateItem(item.id, newTitle);
+            }
+          });
+
+          node.dataset.id = item.id;
+          list.appendChild(node);
+        }
+      }
+
+      // Event bindings
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const title = input.value;
+        if(title.trim() === "") return;
+        addItem(title);
+        input.value = "";
+        input.focus();
+      });
+
+      search.addEventListener("input", () => {
+        state.search = search.value;
+        render();
+      });
+
+      clearCompletedBtn.addEventListener("click", clearCompleted);
+
+      filterButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.filter = btn.dataset.filter;
+          render();
+        });
+      });
+
+      // Initial render
+      render();
+    })();
+  </script>
+</body>
+</html>
